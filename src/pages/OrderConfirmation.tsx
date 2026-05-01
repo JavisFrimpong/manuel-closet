@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle, Package, Mail, Home, Search } from 'lucide-react';
 import Header from '../components/Header';
 import CartSidebar from '../components/CartSidebar';
@@ -7,7 +7,8 @@ import CartSidebar from '../components/CartSidebar';
 const OrderConfirmation = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { orderNumber } = location.state || {};
+  const { orderNumber, emailStatus, emailErrorMessage } = location.state || {};
+  const emailSent = emailStatus !== 'failed';
 
   if (!orderNumber) {
     navigate('/');
@@ -33,7 +34,12 @@ const OrderConfirmation = () => {
         </div>
 
         <h1 className="text-4xl font-bold text-white font-serif mb-3">Order Placed!</h1>
-        <p className="text-gray-400 text-lg mb-8">Thank you for shopping with Manuel's Closet.</p>
+        <p className="text-gray-400 text-lg mb-6">Thank you for shopping with Manuel's Closet.</p>
+        {!emailSent && (
+          <div className="mb-8 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-yellow-300 text-sm">
+            Order was placed, but email notification failed. {emailErrorMessage ? `Reason: ${emailErrorMessage}` : 'Please verify SMTP settings and edge-function deployment.'}
+          </div>
+        )}
 
         {/* Order Number Card */}
         <div className="bg-dark-800 border border-dark-600 rounded-2xl p-8 mb-8">
@@ -47,7 +53,12 @@ const OrderConfirmation = () => {
           {[
             { icon: CheckCircle, label: 'Order Received', color: 'text-green-400', bg: 'bg-green-500/10' },
             { icon: Package, label: 'Processing', color: 'text-brand-400', bg: 'bg-brand-500/10' },
-            { icon: Mail, label: 'Confirmation Sent', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+            {
+              icon: Mail,
+              label: emailSent ? 'Confirmation Sent' : 'Email Failed',
+              color: emailSent ? 'text-blue-400' : 'text-yellow-300',
+              bg: emailSent ? 'bg-blue-500/10' : 'bg-yellow-500/10',
+            },
           ].map(({ icon: Icon, label, color, bg }) => (
             <div key={label} className={`${bg} rounded-xl p-4 flex flex-col items-center gap-2`}>
               <Icon className={color} size={24} />

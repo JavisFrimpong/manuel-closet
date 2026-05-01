@@ -69,8 +69,7 @@ const OrdersTab = () => {
     const matchesSearch =
       !query ||
       order.order_number.toLowerCase().includes(query) ||
-      order.customer_name.toLowerCase().includes(query) ||
-      (order.customer_email || '').toLowerCase().includes(query);
+      order.customer_name.toLowerCase().includes(query) ;
     return matchesStatus && matchesSearch;
   });
 

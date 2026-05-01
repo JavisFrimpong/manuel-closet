@@ -35,6 +35,22 @@ serve(async (req) => {
       });
     }
 
+    const smtpHost = smtpConfig.host ?? smtpConfig.smtp_host;
+    const smtpPort = Number(smtpConfig.port ?? smtpConfig.smtp_port ?? 587);
+    const smtpSecure = Boolean(smtpConfig.secure ?? false);
+    const smtpUser = smtpConfig.username ?? smtpConfig.smtp_user;
+    const smtpPass = smtpConfig.password ?? smtpConfig.smtp_pass;
+    const fromEmail = smtpConfig.from_email ?? smtpUser;
+    const fromName = smtpConfig.from_name ?? "Manuel's Closet";
+    const recipientEmail = smtpConfig.recipient_email ?? fromEmail;
+
+    if (!smtpHost || !smtpUser || !smtpPass || !fromEmail || !recipientEmail) {
+      return new Response(JSON.stringify({ error: 'SMTP config is incomplete' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Build items HTML
     const itemsHtml = items.map((item: any) => `
       <tr style="border-bottom: 1px solid #2a2a2a;">
@@ -121,18 +137,27 @@ serve(async (req) => {
 
     const client = new SMTPClient({
       connection: {
-        hostname: smtpConfig.host,
-        port: smtpConfig.port,
-        tls: smtpConfig.secure,
+        hostname: smtpHost,
+        port: smtpPort,
+        tls: smtpSecure,
         auth: {
-          username: smtpConfig.username,
-          password: smtpConfig.password,
+          username: smtpUser,
+          password: smtpPass,
         },
       },
     });
+    await client.send({
+      from: `${fromName} <${fromEmail}>`,
+      to: recipientEmail,
+      subject: `New Order ${orderNumber} - Manuel's Closet`,
+      html: emailHtml,
+    });
+    await client.close();
 
-
-    
+    return new Response(
+      JSON.stringify({ success: true, orderId, orderNumber, recipientEmail }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (error: any) {
     console.error('send-order-email error:', error);
     return new Response(

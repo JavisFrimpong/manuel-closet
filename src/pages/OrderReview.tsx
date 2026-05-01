@@ -46,7 +46,7 @@ const OrderReview = () => {
         .insert({
           order_number: orderNumber,
           customer_name: customerInfo.name,
-          customer_email: null,
+          customer_email: '',
           customer_phone: customerInfo.phone,
           delivery_address: customerInfo.address,
           notes: customerInfo.notes || null,
@@ -75,15 +75,55 @@ const OrderReview = () => {
 
       // Update stock quantities
       for (const item of items) {
-        await supabase.rpc('decrement_stock', {
-          p_product_id: item.product.id,
-          p_quantity: item.quantity,
-        }).catch(() => {}); // Non-critical, don't block order
+        try {
+          await supabase.rpc('decrement_stock', {
+            p_product_id: item.product.id,
+            p_quantity: item.quantity,
+          });
+        } catch {
+          // Non-critical, don't block order
+        }
+      }
+
+      let emailStatus: 'sent' | 'failed' = 'sent';
+      let emailErrorMessage: string | null = null;
+
+      // Trigger store notification email (non-critical)
+      try {
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-order-email`;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const response = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({
+            orderId: order.id,
+            orderNumber,
+            customerName: customerInfo.name,
+            items: orderItems,
+            totalAmount: totalPrice,
+            deliveryAddress: customerInfo.address,
+          }),
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result?.error) {
+          emailStatus = 'failed';
+          emailErrorMessage = result?.error || `Email send failed (${response.status})`;
+          console.warn('Order email failed:', emailErrorMessage);
+        }
+      } catch {
+        emailStatus = 'failed';
+        emailErrorMessage = 'Email service invocation failed';
+        // Do not block order completion on email delivery issues
       }
 
       clearCart();
       navigate('/order-confirmation', {
-        state: { orderNumber },
+        state: { orderNumber, emailStatus, emailErrorMessage },
       });
     } catch (err: any) {
       setError(err.message || 'Failed to place order. Please try again.');
