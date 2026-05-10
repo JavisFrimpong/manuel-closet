@@ -28,6 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
 const OrdersTab = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<OrderStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -39,12 +40,18 @@ const OrdersTab = () => {
 
   const fetchOrders = async () => {
     setLoading(true);
+    setFetchError(null);
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*)')
       .order('created_at', { ascending: false });
 
-    if (!error && data) setOrders(data);
+    if (error) {
+      setOrders([]);
+      setFetchError(error.message);
+    } else if (data) {
+      setOrders(data);
+    }
     setLoading(false);
   };
 
@@ -66,10 +73,12 @@ const OrdersTab = () => {
   const filtered = orders.filter(order => {
     const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
     const query = searchQuery.toLowerCase();
+    const phone = order.customer_phone?.toLowerCase() ?? '';
     const matchesSearch =
       !query ||
       order.order_number.toLowerCase().includes(query) ||
-      order.customer_name.toLowerCase().includes(query) ;
+      order.customer_name.toLowerCase().includes(query) ||
+      phone.includes(query);
     return matchesStatus && matchesSearch;
   });
 
@@ -83,7 +92,7 @@ const OrdersTab = () => {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by order #, name, email..."
+            placeholder="Search by order #, name, phone..."
             className="w-full bg-dark-700 border border-dark-600 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 transition-all"
           />
         </div>
@@ -106,6 +115,16 @@ const OrdersTab = () => {
           </button>
         </div>
       </div>
+
+      {fetchError && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
+          <p className="font-semibold mb-1">Could not load orders</p>
+          <p>{fetchError}</p>
+          <p className="text-gray-500 text-xs mt-2">
+            If this mentions row-level security, add a SELECT policy for authenticated users on orders and order_items, or confirm you are signed in as admin.
+          </p>
+        </div>
+      )}
 
       {/* Orders List */}
       {loading ? (

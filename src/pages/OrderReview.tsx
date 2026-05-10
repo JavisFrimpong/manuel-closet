@@ -109,7 +109,13 @@ const OrderReview = () => {
           }),
         });
 
-        const result = await response.json().catch(() => ({}));
+        const raw = await response.text();
+        let result: { error?: string } = {};
+        try {
+          result = raw ? JSON.parse(raw) : {};
+        } catch {
+          result = { error: raw.slice(0, 280) || `HTTP ${response.status}` };
+        }
         if (!response.ok || result?.error) {
           emailStatus = 'failed';
           emailErrorMessage = result?.error || `Email send failed (${response.status})`;

@@ -1,27 +1,109 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Eye, EyeOff, LogIn, UserPlus, Loader2, Shield, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus, Loader2, Shield, Sparkles, KeyRound, ArrowLeft } from 'lucide-react';
+
+type AuthMode = 'login' | 'signup' | 'forgot' | 'reset-password';
 
 const AdminLogin = () => {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setMode('reset-password');
+        setError(null);
+        setSuccess(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const goLogin = () => {
+    setMode('login');
+    setError(null);
+    setSuccess(null);
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (!email.trim()) {
+        setError('Enter the email for your admin account.');
+        return;
+      }
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/admin`,
+      });
+      if (resetErr) throw resetErr;
+      setSuccess('If an account exists for this email, you will receive a password reset link shortly.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Request failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (newPassword.length < 6) {
+        setError('Password must be at least 6 characters.');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+      const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateErr) throw updateErr;
+      setSuccess('Password updated. Sign in with your new password.');
+      await supabase.auth.signOut();
+      goLogin();
+      setPassword('');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Update failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === 'forgot') {
+      await handleForgotSubmit(e);
+      return;
+    }
+    if (mode === 'reset-password') {
+      await handleResetSubmit(e);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        // onAuthStateChange in App.tsx handles the redirect automatically
+        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInErr) throw signInErr;
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
@@ -40,23 +122,24 @@ const AdminLogin = () => {
         setMode('login');
         setPassword('');
       }
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Authentication failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
+  const showTabs = mode === 'login' || mode === 'signup';
+
   return (
     <div className="min-h-screen bg-dark-900 flex items-center justify-center px-4">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-brand-600/5 blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-brand-500/5 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-2xl shadow-brand-500/40 mb-4">
             <Shield className="text-white" size={28} />
@@ -65,66 +148,151 @@ const AdminLogin = () => {
           <p className="text-gray-500 text-sm mt-1">Manuel's Closet Management</p>
         </div>
 
-        {/* Card */}
         <div className="bg-dark-800 border border-dark-700 rounded-2xl p-8 shadow-2xl">
-          {/* Tabs */}
-          <div className="flex bg-dark-700 rounded-xl p-1 mb-6">
+          {showTabs && (
+            <div className="flex bg-dark-700 rounded-xl p-1 mb-6">
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  mode === 'login' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30' : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode('signup'); setError(null); setSuccess(null); }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  mode === 'signup' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30' : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
+
+          {mode === 'forgot' && (
             <button
               type="button"
-              onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                mode === 'login' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30' : 'text-gray-400 hover:text-gray-300'
-              }`}
+              onClick={goLogin}
+              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-6 transition-colors"
             >
-              Sign In
+              <ArrowLeft size={16} />
+              Back to sign in
             </button>
-            <button
-              type="button"
-              onClick={() => { setMode('signup'); setError(null); setSuccess(null); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                mode === 'signup' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30' : 'text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          )}
+
+          {mode === 'reset-password' && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 text-brand-400 mb-2">
+                <KeyRound size={20} />
+                <span className="text-sm font-semibold uppercase tracking-wide">Set new password</span>
+              </div>
+              <p className="text-gray-500 text-sm">Choose a new password for your admin account.</p>
+            </div>
+          )}
+
+          {mode === 'forgot' && (
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-white mb-1">Forgot password</h2>
+              <p className="text-gray-500 text-sm">We will email you a link to reset your password.</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="text-gray-400 text-sm font-medium mb-1.5 block">Email</label>
-              <input
-                id="admin-email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="admin@manuelscloset.com"
-                required
-                className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="text-gray-400 text-sm font-medium mb-1.5 block">Password</label>
-              <div className="relative">
+            {(mode === 'login' || mode === 'signup' || mode === 'forgot') && (
+              <div>
+                <label className="text-gray-400 text-sm font-medium mb-1.5 block">Email</label>
                 <input
-                  id="admin-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  id="admin-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@manuelscloset.com"
                   required
-                  minLength={6}
-                  className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 pr-12 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
+                  autoComplete="email"
+                  className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
                 />
+              </div>
+            )}
+
+            {(mode === 'login' || mode === 'signup') && (
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-gray-400 text-sm font-medium">Password</label>
+                  {mode === 'login' && (
+                    <button
+                      type="button"
+                      onClick={() => { setMode('forgot'); setError(null); setSuccess(null); }}
+                      className="text-xs text-brand-400 hover:text-brand-300 font-medium"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    id="admin-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 pr-12 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mode === 'reset-password' && (
+              <>
+                <div>
+                  <label className="text-gray-400 text-sm font-medium mb-1.5 block">New password</label>
+                  <input
+                    id="admin-new-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm font-medium mb-1.5 block">Confirm password</label>
+                  <input
+                    id="admin-confirm-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repeat password"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    className="w-full bg-dark-700 border border-dark-600 rounded-xl px-4 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  className="text-xs text-gray-500 hover:text-gray-400"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? 'Hide passwords' : 'Show passwords'}
                 </button>
-              </div>
-            </div>
+              </>
+            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl p-3 animate-fade-in">
@@ -147,12 +315,24 @@ const AdminLogin = () => {
             >
               {loading ? (
                 <Loader2 size={18} className="animate-spin" />
+              ) : mode === 'forgot' ? (
+                <KeyRound size={18} />
+              ) : mode === 'reset-password' ? (
+                <KeyRound size={18} />
               ) : mode === 'login' ? (
                 <LogIn size={18} />
               ) : (
                 <UserPlus size={18} />
               )}
-              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              {loading
+                ? 'Please wait...'
+                : mode === 'forgot'
+                  ? 'Send reset link'
+                  : mode === 'reset-password'
+                    ? 'Update password'
+                    : mode === 'login'
+                      ? 'Sign In'
+                      : 'Create Account'}
             </button>
           </form>
         </div>

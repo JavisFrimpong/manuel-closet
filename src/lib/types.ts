@@ -35,6 +35,7 @@ export interface Order {
   id: string;
   order_number: string;
   customer_name: string;
+  customer_email?: string | null;
   customer_phone: string;
   delivery_address: string;
   total_amount: number;

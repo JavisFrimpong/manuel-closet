@@ -36,8 +36,16 @@ const OrderConfirmation = () => {
         <h1 className="text-4xl font-bold text-white font-serif mb-3">Order Placed!</h1>
         <p className="text-gray-400 text-lg mb-6">Thank you for shopping with Manuel's Closet.</p>
         {!emailSent && (
-          <div className="mb-8 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-yellow-300 text-sm">
-            Order was placed, but email notification failed. {emailErrorMessage ? `Reason: ${emailErrorMessage}` : 'Please verify SMTP settings and edge-function deployment.'}
+          <div className="mb-8 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-yellow-300 text-sm text-left">
+            <p className="mb-2">
+              Order was placed, but email notification failed.{' '}
+              {emailErrorMessage ? `Reason: ${emailErrorMessage}` : 'Please verify edge-function deployment and email settings.'}
+            </p>
+            <p className="text-yellow-200/80 text-xs leading-relaxed">
+              For reliable delivery, add Supabase Edge secrets <span className="font-mono text-yellow-100">RESEND_API_KEY</span> and{' '}
+              <span className="font-mono text-yellow-100">ORDER_NOTIFY_EMAIL</span> (Resend works when SMTP is blocked). Add{' '}
+              <span className="font-mono text-yellow-100">https://your-site.com/admin</span> under Authentication URL configuration for password reset emails.
+            </p>
           </div>
         )}
 
