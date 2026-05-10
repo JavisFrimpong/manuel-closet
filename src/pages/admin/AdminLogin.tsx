@@ -4,8 +4,23 @@ import { Eye, EyeOff, LogIn, UserPlus, Loader2, Shield, Sparkles, KeyRound, Arro
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'reset-password';
 
-const AdminLogin = () => {
-  const [mode, setMode] = useState<AuthMode>('login');
+function isRecoveryUrl(): boolean {
+  if (typeof window === 'undefined') return false;
+  const { hash, search } = window.location;
+  return hash.includes('type=recovery') || search.includes('type=recovery');
+}
+
+export interface AdminLoginProps {
+  /** When true, user arrived from a password reset link and should set a new password (even though they have a temporary session). */
+  passwordRecoveryFlow?: boolean;
+  /** Called after password is updated successfully so the app can leave recovery routing. */
+  onPasswordRecoveryFinished?: () => void;
+}
+
+const AdminLogin = ({ passwordRecoveryFlow = false, onPasswordRecoveryFinished }: AdminLoginProps) => {
+  const [mode, setMode] = useState<AuthMode>(() =>
+    passwordRecoveryFlow || isRecoveryUrl() ? 'reset-password' : 'login',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -14,6 +29,14 @@ const AdminLogin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (passwordRecoveryFlow || isRecoveryUrl()) {
+      setMode('reset-password');
+      setError(null);
+      setSuccess(null);
+    }
+  }, [passwordRecoveryFlow]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -74,7 +97,11 @@ const AdminLogin = () => {
       const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword });
       if (updateErr) throw updateErr;
       setSuccess('Password updated. Sign in with your new password.');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '/admin');
+      }
       await supabase.auth.signOut();
+      onPasswordRecoveryFinished?.();
       goLogin();
       setPassword('');
     } catch (err: unknown) {

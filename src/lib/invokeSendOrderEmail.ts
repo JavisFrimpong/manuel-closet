@@ -1,8 +1,9 @@
-import { FunctionsClient } from '@supabase/functions-js';
+import { FunctionsClient, FunctionsHttpError } from '@supabase/functions-js';
 
 /**
  * Invokes send-order-email without the Supabase client's fetch wrapper.
  * In dev, uses Vite proxy (/supabase-fn → project functions) to avoid browser CORS issues.
+ * Surfaces JSON `error` from non-2xx responses instead of the generic "non-2xx status code" message.
  */
 export async function invokeSendOrderEmail(body: Record<string, unknown>) {
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -28,5 +29,21 @@ export async function invokeSendOrderEmail(body: Record<string, unknown>) {
     customFetch: globalThis.fetch.bind(globalThis),
   });
 
-  return client.invoke('send-order-email', { body });
+  const result = await client.invoke('send-order-email', { body });
+
+  if (result.error instanceof FunctionsHttpError && result.error.context instanceof Response) {
+    const res = result.error.context;
+    const text = await res.text().catch(() => '');
+    let detail = `Edge Function HTTP ${res.status}`;
+    try {
+      const parsed = text ? JSON.parse(text) : {};
+      if (parsed && typeof parsed.error === 'string') detail = parsed.error;
+      else if (text) detail = `${detail}: ${text.slice(0, 400)}`;
+    } catch {
+      if (text) detail = `${detail}: ${text.slice(0, 400)}`;
+    }
+    return { data: null, error: new Error(detail) };
+  }
+
+  return result;
 }
