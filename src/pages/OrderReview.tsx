@@ -88,43 +88,47 @@ const OrderReview = () => {
       let emailStatus: 'sent' | 'failed' = 'sent';
       let emailErrorMessage: string | null = null;
 
-      // Trigger store notification email (non-critical)
+      // Trigger store notification email (non-critical) — use SDK invoke (correct URL + session headers)
       try {
-        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-order-email`;
-        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const response = await fetch(functionUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: anonKey,
-            Authorization: `Bearer ${anonKey}`,
-          },
-          body: JSON.stringify({
+        const { data: emailResult, error: invokeError } = await supabase.functions.invoke('send-order-email', {
+          body: {
             orderId: order.id,
             orderNumber,
             customerName: customerInfo.name,
             items: orderItems,
             totalAmount: totalPrice,
             deliveryAddress: customerInfo.address,
-          }),
+          },
         });
 
-        const raw = await response.text();
-        let result: { error?: string } = {};
-        try {
-          result = raw ? JSON.parse(raw) : {};
-        } catch {
-          result = { error: raw.slice(0, 280) || `HTTP ${response.status}` };
-        }
-        if (!response.ok || result?.error) {
+        if (invokeError) {
           emailStatus = 'failed';
-          emailErrorMessage = result?.error || `Email send failed (${response.status})`;
+          let msg = invokeError.message || 'Email send failed';
+          const ctx = (invokeError as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            try {
+              const body = await ctx.clone().json();
+              if (body && typeof body.error === 'string') msg = body.error;
+            } catch {
+              /* ignore */
+            }
+          }
+          if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+            msg =
+              'Could not reach the email service (network/CORS). Redeploy the send-order-email function, ensure production build has VITE_SUPABASE_URL, allow this origin in Supabase Auth URL settings, and try disabling ad blockers.';
+          }
+          emailErrorMessage = msg;
           console.warn('Order email failed:', emailErrorMessage);
+        } else if (emailResult && typeof emailResult === 'object' && 'error' in emailResult && emailResult.error) {
+          emailStatus = 'failed';
+          emailErrorMessage = String((emailResult as { error: string }).error);
         }
-      } catch {
+      } catch (err: unknown) {
         emailStatus = 'failed';
-        emailErrorMessage = 'Email service invocation failed';
-        // Do not block order completion on email delivery issues
+        const m = err instanceof Error ? err.message : String(err);
+        emailErrorMessage = /failed to fetch/i.test(m)
+          ? 'Could not reach the email service. Check connection, ad blockers, and that VITE_SUPABASE_URL is set when the app was built.'
+          : m || 'Email service invocation failed';
       }
 
       clearCart();
