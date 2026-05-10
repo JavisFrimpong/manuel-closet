@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { invokeSendOrderEmail } from '../lib/invokeSendOrderEmail';
 import { useCart } from '../context/CartContext';
 import Header from '../components/Header';
 import CartSidebar from '../components/CartSidebar';
@@ -88,17 +89,15 @@ const OrderReview = () => {
       let emailStatus: 'sent' | 'failed' = 'sent';
       let emailErrorMessage: string | null = null;
 
-      // Trigger store notification email (non-critical) — use SDK invoke (correct URL + session headers)
+      // Trigger store notification (non-critical). Dev uses Vite proxy to avoid CORS fetch failures.
       try {
-        const { data: emailResult, error: invokeError } = await supabase.functions.invoke('send-order-email', {
-          body: {
-            orderId: order.id,
-            orderNumber,
-            customerName: customerInfo.name,
-            items: orderItems,
-            totalAmount: totalPrice,
-            deliveryAddress: customerInfo.address,
-          },
+        const { data: emailResult, error: invokeError } = await invokeSendOrderEmail({
+          orderId: order.id,
+          orderNumber,
+          customerName: customerInfo.name,
+          items: orderItems,
+          totalAmount: totalPrice,
+          deliveryAddress: customerInfo.address,
         });
 
         if (invokeError) {
@@ -107,15 +106,15 @@ const OrderReview = () => {
           const ctx = (invokeError as { context?: Response }).context;
           if (ctx && typeof ctx.json === 'function') {
             try {
-              const body = await ctx.clone().json();
-              if (body && typeof body.error === 'string') msg = body.error;
+              const errBody = await ctx.clone().json();
+              if (errBody && typeof errBody.error === 'string') msg = errBody.error;
             } catch {
               /* ignore */
             }
           }
-          if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+          if (/Failed to send a request to the Edge Function|failed to fetch|networkerror|load failed/i.test(msg)) {
             msg =
-              'Could not reach the email service (network/CORS). Redeploy the send-order-email function, ensure production build has VITE_SUPABASE_URL, allow this origin in Supabase Auth URL settings, and try disabling ad blockers.';
+              'Could not reach the Edge Function (network/CORS). Deploy send-order-email, set VITE_* env at build time, disable ad blockers, or add connect-src for your Supabase URL in hosting CSP. In local dev, use npm run dev so the Vite proxy can forward /supabase-fn.';
           }
           emailErrorMessage = msg;
           console.warn('Order email failed:', emailErrorMessage);
@@ -127,7 +126,7 @@ const OrderReview = () => {
         emailStatus = 'failed';
         const m = err instanceof Error ? err.message : String(err);
         emailErrorMessage = /failed to fetch/i.test(m)
-          ? 'Could not reach the email service. Check connection, ad blockers, and that VITE_SUPABASE_URL is set when the app was built.'
+          ? 'Could not reach the email service. Use npm run dev for local testing, verify production env vars, and deploy the send-order-email function.'
           : m || 'Email service invocation failed';
       }
 

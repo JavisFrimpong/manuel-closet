@@ -43,8 +43,10 @@ const OrderConfirmation = () => {
             </p>
             <p className="text-yellow-200/80 text-xs leading-relaxed">
               For reliable delivery, add Supabase Edge secrets <span className="font-mono text-yellow-100">RESEND_API_KEY</span> and{' '}
-              <span className="font-mono text-yellow-100">ORDER_NOTIFY_EMAIL</span> (Resend works when SMTP is blocked). Add{' '}
-              <span className="font-mono text-yellow-100">https://your-site.com/admin</span> under Authentication URL configuration for password reset emails.
+              <span className="font-mono text-yellow-100">ORDER_NOTIFY_EMAIL</span> (Resend works when SMTP is blocked). Deploy the{' '}
+              <span className="font-mono text-yellow-100">send-order-email</span> function. In Supabase Auth URL settings, add{' '}
+              <span className="font-mono text-yellow-100 break-all">{typeof window !== 'undefined' ? `${window.location.origin}/admin` : '/admin'}</span>{' '}
+              as a redirect URL. If this error appears only locally, run <span className="font-mono text-yellow-100">npm run dev</span> so the Vite proxy can call Edge Functions without CORS issues.
             </p>
           </div>
         )}

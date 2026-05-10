@@ -1,0 +1,4 @@
+# https://supabase.com/docs/guides/cli/config
+# Allows the storefront (anon JWT) to invoke order email without gateway JWT edge cases.
+[functions.send-order-email]
+verify_jwt = false
